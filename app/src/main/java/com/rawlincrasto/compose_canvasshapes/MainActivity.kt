@@ -4,71 +4,158 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.Button
+import androidx.compose.material.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
+import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MyCanvas()
+            MainScreen()
         }
     }
 }
 
-
 @Composable
-fun MyCanvas() {
-    Canvas(
-        modifier = Modifier
-            .padding(20.dp)
-            .size(300.dp)
-    ) {
-        drawRect(
-            color = Color.Black,
-            size = size
-        )
-
-        drawRect(
-            color = Color.Red,
-            topLeft = Offset(100f, 100f),
-            size = Size(100f, 100f),
-            style = Stroke(
-                width = 3.dp.toPx()
+fun MainScreen() {
+    var points by remember {
+        mutableStateOf(0)
+    }
+    var isTimerRunning by remember {
+        mutableStateOf(false)
+    }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Points: $points",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
             )
-        )
-
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(Color.Red, Color.Yellow),
-                center = center,
-                radius = 100f
-            ),
-            radius = 100f,
-            center = center
-        )
-
-        drawArc(
-            color = Color.Green,
-            startAngle = 0f,
-            sweepAngle = 270f,
-            useCenter = false,
-            topLeft = Offset(70f, 370f),
-            size = Size(200f, 200f),
-            style = Stroke(
-                width = 2.dp.toPx()
-            )
-        )
+            Button(onClick = {
+                isTimerRunning = !isTimerRunning
+                points = 0
+            }) {
+                Text(text = if (isTimerRunning) "Reset" else "Start")
+            }
+            CountdownTimer(
+                isTimerRunning = isTimerRunning
+            ) {
+                isTimerRunning = false
+            }
+        }
+        BallClicker(
+            enabled = isTimerRunning
+        ) {
+            points++
+        }
     }
 }
+
+@Composable
+fun CountdownTimer(
+    time: Int = 30000,
+    isTimerRunning: Boolean = false,
+    onTimerEnd: () -> Unit = {}
+) {
+    var curTime by remember {
+        mutableStateOf(time)
+    }
+
+    LaunchedEffect(key1 = curTime, key2 = isTimerRunning) {
+        if (!isTimerRunning) {
+            curTime = time
+            return@LaunchedEffect
+        }
+        if (curTime > 0) {
+            delay(1000L)
+            curTime -= 1000
+        } else {
+            onTimerEnd()
+        }
+    }
+    Text(
+        text = (curTime / 1000).toString(),
+        fontSize = 20.sp,
+        fontWeight = FontWeight.Bold
+    )
+
+}
+
+@Composable
+fun BallClicker(
+    radius: Float = 100f,
+    enabled: Boolean = false,
+    ballColor: Color = Color.Red,
+    onBallClicked: () -> Unit = {}
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        var ballPosition by remember {
+            mutableStateOf(
+                randomOffset(
+                    radius = radius,
+                    width = constraints.maxWidth,
+                    height = constraints.maxHeight,
+                )
+            )
+        }
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(enabled) {
+                    delay(100L)
+                    if (!enabled) {
+                        return@pointerInput
+                    }
+                    detectTapGestures { positionClicked ->
+                        val distance = sqrt(
+                            (positionClicked.x - ballPosition.x).pow(2) +
+                                    (positionClicked.y - ballPosition.y).pow(2)
+                        )
+                        if (distance <= radius) {
+                            ballPosition = randomOffset(
+                                radius = radius,
+                                width = constraints.maxWidth,
+                                height = constraints.maxHeight
+                            )
+                            onBallClicked()
+                        }
+                    }
+                }
+        ) {
+            drawCircle(
+                color = ballColor,
+                radius = radius,
+                center = ballPosition
+            )
+        }
+    }
+
+}
+
+private fun randomOffset(radius: Float, width: Int, height: Int): Offset {
+    return Offset(
+        x = Random.nextInt(radius.roundToInt(), width - radius.roundToInt()).toFloat(),
+        y = Random.nextInt(radius.roundToInt(), height - radius.roundToInt()).toFloat()
+    )
+}
+
